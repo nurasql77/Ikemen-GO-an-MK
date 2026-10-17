@@ -1,0 +1,48 @@
+name: MK Trilogy HD Android APK
+
+on:
+  push:
+    branches:
+      - mk-trilogy-android-port
+    paths:
+      - "assets/**"
+      - "build/**"
+      - ".github/workflows/mk-trilogy-android.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mk-trilogy-android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-android-apk:
+    name: Build Android ARM64 APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Build engine and APK
+        env:
+          APP_VERSION: mk-trilogy-hd-${{ github.run_number }}
+          APP_BUILDTIME: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          chmod +x build/build_android.sh
+          ./build/build_android.sh
+          test -s bin/ikemen-go.apk
+          file bin/ikemen-go.apk
+          ls -lh bin/ikemen-go.apk
+
+      - name: Upload installable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MK-Trilogy-HD-Android-APK
+          path: bin/ikemen-go.apk
+          if-no-files-found: error
+          retention-days: 14
