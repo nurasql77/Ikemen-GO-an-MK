@@ -39,7 +39,7 @@ jobs:
       - name: Prepare Android wrapper and touch controls
         run: |
           set -euo pipefail
-          WRAPPER_DIR="$RUNNER_TEMP/ikemen-droid"
+          WRAPPER_DIR="$GITHUB_WORKSPACE/build/android-apk/ikemen-droid"
           git clone --depth=1 --branch main https://github.com/Jesuszilla/ikemen-droid.git "$WRAPPER_DIR"
 
           MANIFEST="$WRAPPER_DIR/app/src/main/assets/manifest.txt"
@@ -283,7 +283,8 @@ jobs:
           PY
 
           echo "Runtime-only manifest and dedicated 4-button touch layout prepared."
-          echo "ANDROID_APK_REPO=$WRAPPER_DIR" >> "$GITHUB_ENV"
+          echo "ANDROID_APK_REPO=/work/build/android-apk/ikemen-droid" >> "$GITHUB_ENV"
+          echo "ANDROID_APK_REF=main" >> "$GITHUB_ENV"
 
       - name: Build engine and APK
         env:
