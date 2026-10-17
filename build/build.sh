@@ -1277,8 +1277,8 @@ function build_android_apk() {
 	# Android wrapper's Java namespace (which its SDL classes depend on).
 	local app_gradle="$ANDROID_APK_DIR/app/build.gradle"
 	local app_strings="$ANDROID_APK_DIR/app/src/main/res/values/strings.xml"
-	local android_app_id="${ANDROID_APP_ID:-com.nurasql77.mktrilogyhd}"
-	local android_app_name="${ANDROID_APP_NAME:-MK Trilogy HD}"
+	local android_app_id="${ANDROID_APP_ID:-kz.MKHD.base64E}"
+	local android_app_name="${ANDROID_APP_NAME:-MK HD}"
 	if [[ -f "$app_gradle" ]]; then
 		sed_inplace "s/applicationId \"org.ikemen_engine.ikemen_go\"/applicationId \"$android_app_id\"/" "$app_gradle"
 	fi
