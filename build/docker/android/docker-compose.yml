@@ -28,6 +28,9 @@ services:
       APP_BUILDTIME: "${APP_BUILDTIME:-2026.01.13}"
       # Build APK automatically (default is 1, but make it explicit in compose)
       BUILD_ANDROID_APK: "${BUILD_ANDROID_APK:-1}"
+      # Use the patched wrapper prepared by the workflow inside the mounted repo.
+      ANDROID_APK_REPO: "${ANDROID_APK_REPO:-https://github.com/Jesuszilla/ikemen-droid.git}"
+      ANDROID_APK_REF: "${ANDROID_APK_REF:-main}"
     command: >
       bash -lc "
         set -euo pipefail;
