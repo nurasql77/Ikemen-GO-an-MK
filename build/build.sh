@@ -1218,7 +1218,7 @@ function stage_android_apk_assets() {
 			mkdir -p "$(dirname "$dst")"
 			cp -f "$src" "$dst"
 			if ! grep -Fxq "$rel" "$manifest"; then
-				printf '%s\\n' "$rel" >> "$manifest"
+				printf '%s\n' "$rel" >> "$manifest"
 			fi
 		done < <(find "$custom_assets" -type f -print0)
 	fi
