@@ -161,35 +161,44 @@ jobs:
               <RelativeLayout
                   android:id="@+id/button_grid"
                   android:layout_width="188dp"
-                  android:layout_height="156dp"
+                  android:layout_height="124dp"
                   android:layout_alignParentRight="true"
                   android:layout_alignParentBottom="true"
                   android:layout_marginRight="12dp"
                   android:layout_marginBottom="26dp"
                   android:splitMotionEvents="true">
 
-                  <Button android:id="@+id/btn_y" android:text="Y"
-                      android:layout_width="52dp" android:layout_height="52dp"
-                      android:layout_centerHorizontal="true" android:layout_alignParentTop="true"
-                      android:background="@drawable/round_button"/>
+                  <!-- Six independent fighting-game buttons; hitboxes do not overlap. -->
                   <Button android:id="@+id/btn_x" android:text="X"
-                      android:layout_width="52dp" android:layout_height="52dp"
-                      android:layout_alignParentLeft="true" android:layout_centerVertical="true"
+                      android:layout_width="60dp" android:layout_height="58dp"
+                      android:layout_alignParentLeft="true" android:layout_alignParentTop="true"
                       android:background="@drawable/round_button"/>
-                  <Button android:id="@+id/btn_b" android:text="B"
-                      android:layout_width="52dp" android:layout_height="52dp"
-                      android:layout_alignParentRight="true" android:layout_centerVertical="true"
+                  <Button android:id="@+id/btn_y" android:text="Y"
+                      android:layout_width="60dp" android:layout_height="58dp"
+                      android:layout_toRightOf="@id/btn_x" android:layout_alignParentTop="true"
+                      android:layout_marginLeft="4dp"
+                      android:background="@drawable/round_button"/>
+                  <Button android:id="@+id/btn_d" android:text="L"
+                      android:layout_width="60dp" android:layout_height="58dp"
+                      android:layout_toRightOf="@id/btn_y" android:layout_alignParentTop="true"
+                      android:layout_marginLeft="4dp"
                       android:background="@drawable/round_button"/>
                   <Button android:id="@+id/btn_a" android:text="A"
-                      android:layout_width="52dp" android:layout_height="52dp"
-                      android:layout_centerHorizontal="true" android:layout_alignParentBottom="true"
+                      android:layout_width="60dp" android:layout_height="58dp"
+                      android:layout_alignParentLeft="true" android:layout_alignParentBottom="true"
+                      android:background="@drawable/round_button"/>
+                  <Button android:id="@+id/btn_b" android:text="B"
+                      android:layout_width="60dp" android:layout_height="58dp"
+                      android:layout_toRightOf="@id/btn_a" android:layout_alignParentBottom="true"
+                      android:layout_marginLeft="4dp"
+                      android:background="@drawable/round_button"/>
+                  <Button android:id="@+id/btn_z" android:text="R"
+                      android:layout_width="60dp" android:layout_height="58dp"
+                      android:layout_toRightOf="@id/btn_b" android:layout_alignParentBottom="true"
+                      android:layout_marginLeft="4dp"
                       android:background="@drawable/round_button"/>
 
-                  <!-- Keep unused controller IDs present for Java compatibility. -->
-                  <Button android:id="@+id/btn_d" android:visibility="gone"
-                      android:layout_width="1dp" android:layout_height="1dp" android:text="D"/>
-                  <Button android:id="@+id/btn_z" android:visibility="gone"
-                      android:layout_width="1dp" android:layout_height="1dp" android:text="Z"/>
+                  <!-- Unused trigger IDs remain hidden for Java compatibility. -->
                   <Button android:id="@+id/btn_w" android:visibility="gone"
                       android:layout_width="1dp" android:layout_height="1dp" android:text="W"/>
                   <Button android:id="@+id/btn_c" android:visibility="gone"
