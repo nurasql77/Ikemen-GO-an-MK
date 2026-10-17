@@ -1191,16 +1191,46 @@ function stage_android_apk_assets() {
 	local app_dir="$ANDROID_APK_DIR/app"
 	local assets_dir="$app_dir/src/main/assets"
 	local manifest="$assets_dir/manifest.txt"
+	local custom_assets="$REPO_ROOT/assets"
 
 	if [[ ! -f "$manifest" ]]; then
 		echo "ERROR: ikemen-droid manifest not found at: $manifest" >&2
 		exit 1
 	fi
 
-	# Remove everything except manifest.txt so the APK content matches your engine tree
+	# Start with a clean wrapper asset tree, then stage the stock Ikemen assets.
 	find "$assets_dir" -mindepth 1 -maxdepth 1 ! -name "manifest.txt" -exec rm -rf {} + 2>/dev/null || true
-
 	stage_manifest_assets "$manifest" "$assets_dir"
+
+	# Optional game assets are supplied by the repository owner under ./assets.
+	# They overlay the stock screenpack and are copied into the APK at their
+	# original relative paths (e.g. assets/data/system.def -> data/system.def).
+	if [[ -d "$custom_assets" ]]; then
+		echo "==> Overlaying custom game assets from $custom_assets"
+		while IFS= read -r -d '' src; do
+			local rel="${src#"$custom_assets"/}"
+			[[ "$rel" == "README.md" || "$rel" == "manifest.txt" ]] && continue
+			if [[ "$rel" =~ [[:space:]] ]]; then
+				echo "ERROR: Asset paths cannot contain spaces (manifest.txt is whitespace-delimited): $rel" >&2
+				exit 1
+			fi
+			local dst="$assets_dir/$rel"
+			mkdir -p "$(dirname "$dst")"
+			cp -f "$src" "$dst"
+			if ! grep -Fxq "$rel" "$manifest"; then
+				printf '%s\\n' "$rel" >> "$manifest"
+			fi
+		done < <(find "$custom_assets" -type f -print0)
+	fi
+
+	# Confirm every manifest entry can be packed into the APK.
+	while IFS= read -r rel; do
+		[[ -z "$rel" ]] && continue
+		if [[ ! -e "$assets_dir/$rel" ]]; then
+			echo "ERROR: Manifest entry missing after staging: $rel" >&2
+			exit 1
+		fi
+	done < "$manifest"
 }
 
 # Copy every path listed in a wrapper manifest (ikemen-droid / ikemen-ios) into dest_dir.
