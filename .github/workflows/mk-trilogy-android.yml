@@ -27,42 +27,16 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      # The MK game archive is kept outside the repository because it contains
-      # the large chars/data/stages game resources. Only the small runtime
-      # resources needed by the APK are copied into the temporary build tree.
-      - name: Download MK Trilogy HD archive
-        env:
-          MK_ARCHIVE_URL: https://drive.google.com/uc?id=1nVTZAGssywICgH6YP-AGFm_nYSKK5YQ5
+      # Keep copyrighted game data out of the APK and repository. The APK is
+      # the native Ikemen GO runtime; users select their own complete game folder.
+      - name: Prepare runtime-only game assets
         run: |
           set -euo pipefail
-          python3 -m pip install --disable-pip-version-check --no-cache-dir gdown
-          mkdir -p "$RUNNER_TEMP/mk-archive"
-          gdown --fuzzy "$MK_ARCHIVE_URL" -O "$RUNNER_TEMP/mk-archive/mk-trilogy-hd.zip"
-          test -s "$RUNNER_TEMP/mk-archive/mk-trilogy-hd.zip"
-          unzip -q "$RUNNER_TEMP/mk-archive/mk-trilogy-hd.zip" -d "$RUNNER_TEMP/mk-archive/extracted"
-
-          MK_ROOT="$(find "$RUNNER_TEMP/mk-archive/extracted" -type f -name config.ini -path '*/save/config.ini' -printf '%h\n' | head -n 1)"
-          test -n "$MK_ROOT"
-          echo "MK_ROOT=$MK_ROOT" >> "$GITHUB_ENV"
-          echo "MK archive root: $MK_ROOT"
-
-          # These large game directories are deliberately NOT copied into the APK.
-          # The user will add chars/, data/ and stages/ separately after install.
           rm -rf assets
           mkdir -p assets
+          echo "Building runtime-only APK; no game archive will be downloaded or bundled."
 
-          cp -a "$MK_ROOT/font" assets/
-          cp -a "$MK_ROOT/sound" assets/
-          cp -a "$MK_ROOT/video" assets/
-          mkdir -p assets/save
-          cp -f "$MK_ROOT/save/config.ini" assets/save/
-          cp -f "$MK_ROOT/save/stats.json" assets/save/
-
-          echo "APK game assets prepared:"
-          du -sh assets
-          find assets -type f -printf '%P\n' | sort
-
-      - name: Prepare minimal Android wrapper manifest
+      - name: Prepare Android wrapper and touch controls
         run: |
           set -euo pipefail
           WRAPPER_DIR="$RUNNER_TEMP/ikemen-droid"
@@ -70,19 +44,226 @@ jobs:
 
           MANIFEST="$WRAPPER_DIR/app/src/main/assets/manifest.txt"
           cat > "$MANIFEST" <<'EOF'
-external/gamecontrollerdb.txt
-external/icons/IkemenCylia_256.png
-external/icons/IkemenCylia_96.png
-external/icons/IkemenCylia_48.png
-external/script/main.lua
-EOF
+          external/gamecontrollerdb.txt
+          external/icons/IkemenCylia_256.png
+          external/icons/IkemenCylia_96.png
+          external/icons/IkemenCylia_48.png
+          external/script/main.lua
+          external/script/menu.lua
+          external/script/options.lua
+          external/script/default.lua
+          external/script/start.lua
+          external/script/debug.lua
+          data/system.base.def
+          EOF
 
-          # build/build.sh stages the repository's ./assets directory on top of
-          # this manifest, so the MK font/sound/video/save files are packaged
-          # without pulling the generic Ikemen demo/KFM/stage assets.
-          echo "Minimal wrapper manifest:"
-          cat "$MANIFEST"
+          python3 - "$WRAPPER_DIR" <<'PY'
+          from pathlib import Path
+          import sys
 
+          root = Path(sys.argv[1])
+          java = root / "app/src/main/java/org/libsdl/app/ControllerOverlay.java"
+          source = java.read_text(encoding="utf-8")
+
+          old_padding = "int padding = dpToPx(16);"
+          if old_padding not in source:
+              raise SystemExit("Could not find expected touch-button hitbox code; refusing to build with unknown controls.")
+          source = source.replace(old_padding, "int padding = dpToPx(0);", 1)
+
+          old_touch_start = """        int action = event.getActionMasked();
+                  int index = event.getActionIndex();
+                  int pId = event.getPointerId(index);
+
+                  // Get raw coordinates for global hit detection
+                  float x = event.getX(index);
+                  float y = event.getY(index);
+          """
+          new_touch_start = """        int action = event.getActionMasked();
+
+                  // ACTION_CANCEL can happen when Android interrupts a multi-touch gesture.
+                  // Release every held input so no direction/button remains stuck.
+                  if (action == MotionEvent.ACTION_CANCEL) {
+                      for (Integer pointerId : new HashSet<>(pointerStates.keySet())) {
+                          releasePointer(pointerId);
+                      }
+                      resetJoystick(findViewById(R.id.left_analog));
+                      resetJoystick(findViewById(R.id.right_analog));
+                      leftJoyPointerId = -1;
+                      rightJoyPointerId = -1;
+                      hatX = 0;
+                      hatY = 0;
+                      SDLControllerManager.onNativeHat(virtualDeviceId, 0, 0, 0);
+                      updateDpadVisual(0, 0);
+                      return true;
+                  }
+
+                  int index = event.getActionIndex();
+                  int pId = event.getPointerId(index);
+
+                  // Get raw coordinates for global hit detection
+                  float x = event.getX(index);
+                  float y = event.getY(index);
+          """
+          if old_touch_start not in source:
+              raise SystemExit("Could not find expected touch event block; refusing to build with unknown input handling.")
+          source = source.replace(old_touch_start, new_touch_start, 1)
+          java.write_text(source, encoding="utf-8")
+
+          layout = root / "app/src/main/res/layout/virtual_controller.xml"
+          layout.write_text("""<?xml version="1.0" encoding="utf-8"?>
+          <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:app="http://schemas.android.com/apk/res-auto"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:splitMotionEvents="true">
+
+              <RelativeLayout
+                  android:id="@+id/dpad_container"
+                  android:layout_width="132dp"
+                  android:layout_height="132dp"
+                  android:layout_alignParentLeft="true"
+                  android:layout_alignParentBottom="true"
+                  android:layout_marginLeft="12dp"
+                  android:layout_marginBottom="26dp"
+                  android:splitMotionEvents="true"
+                  android:background="@drawable/round_button"
+                  android:backgroundTint="#88FFFFFF">
+
+                  <Button android:id="@+id/dp_up" android:text="↑"
+                      android:layout_width="44dp" android:layout_height="44dp"
+                      android:layout_centerHorizontal="true" android:layout_alignParentTop="true"
+                      android:alpha="0.72" android:background="#00000000"/>
+                  <Button android:id="@+id/dp_left" android:text="←"
+                      android:layout_width="44dp" android:layout_height="44dp"
+                      android:layout_centerVertical="true" android:layout_alignParentLeft="true"
+                      android:alpha="0.72" android:background="#00000000"/>
+                  <Button android:id="@+id/dp_down" android:text="↓"
+                      android:layout_width="44dp" android:layout_height="44dp"
+                      android:layout_centerHorizontal="true" android:layout_alignParentBottom="true"
+                      android:alpha="0.72" android:background="#00000000"/>
+                  <Button android:id="@+id/dp_right" android:text="→"
+                      android:layout_width="44dp" android:layout_height="44dp"
+                      android:layout_centerVertical="true" android:layout_alignParentRight="true"
+                      android:alpha="0.72" android:background="#00000000"/>
+              </RelativeLayout>
+
+              <!-- Hidden analog sticks remain in the hierarchy because the SDL
+                   virtual-gamepad initializer expects these IDs to exist. -->
+              <org.libsdl.app.JoystickOverlay
+                  android:id="@+id/left_analog"
+                  android:layout_width="1dp" android:layout_height="1dp"
+                  android:visibility="gone" app:axisX="0" app:axisY="1"/>
+              <org.libsdl.app.JoystickOverlay
+                  android:id="@+id/right_analog"
+                  android:layout_width="1dp" android:layout_height="1dp"
+                  android:visibility="gone" app:axisX="2" app:axisY="3"/>
+
+              <RelativeLayout
+                  android:id="@+id/button_grid"
+                  android:layout_width="188dp"
+                  android:layout_height="156dp"
+                  android:layout_alignParentRight="true"
+                  android:layout_alignParentBottom="true"
+                  android:layout_marginRight="12dp"
+                  android:layout_marginBottom="26dp"
+                  android:splitMotionEvents="true">
+
+                  <Button android:id="@+id/btn_y" android:text="Y"
+                      android:layout_width="52dp" android:layout_height="52dp"
+                      android:layout_centerHorizontal="true" android:layout_alignParentTop="true"
+                      android:background="@drawable/round_button"/>
+                  <Button android:id="@+id/btn_x" android:text="X"
+                      android:layout_width="52dp" android:layout_height="52dp"
+                      android:layout_alignParentLeft="true" android:layout_centerVertical="true"
+                      android:background="@drawable/round_button"/>
+                  <Button android:id="@+id/btn_b" android:text="B"
+                      android:layout_width="52dp" android:layout_height="52dp"
+                      android:layout_alignParentRight="true" android:layout_centerVertical="true"
+                      android:background="@drawable/round_button"/>
+                  <Button android:id="@+id/btn_a" android:text="A"
+                      android:layout_width="52dp" android:layout_height="52dp"
+                      android:layout_centerHorizontal="true" android:layout_alignParentBottom="true"
+                      android:background="@drawable/round_button"/>
+
+                  <!-- Keep unused controller IDs present for Java compatibility. -->
+                  <Button android:id="@+id/btn_d" android:visibility="gone"
+                      android:layout_width="1dp" android:layout_height="1dp" android:text="D"/>
+                  <Button android:id="@+id/btn_z" android:visibility="gone"
+                      android:layout_width="1dp" android:layout_height="1dp" android:text="Z"/>
+                  <Button android:id="@+id/btn_w" android:visibility="gone"
+                      android:layout_width="1dp" android:layout_height="1dp" android:text="W"/>
+                  <Button android:id="@+id/btn_c" android:visibility="gone"
+                      android:layout_width="1dp" android:layout_height="1dp" android:text="C"/>
+              </RelativeLayout>
+
+              <LinearLayout
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:layout_centerHorizontal="true"
+                  android:layout_alignParentTop="true"
+                  android:layout_marginTop="8dp"
+                  android:splitMotionEvents="true">
+                  <Button android:id="@+id/btn_back" android:text="SELECT"
+                      android:layout_width="64dp" android:layout_height="36dp"
+                      android:layout_margin="4dp" android:textSize="10sp"
+                      android:background="@drawable/round_button"/>
+                  <Button android:id="@+id/btn_start" android:text="START"
+                      android:layout_width="64dp" android:layout_height="36dp"
+                      android:layout_margin="4dp" android:textSize="10sp"
+                      android:background="@drawable/round_button"/>
+              </LinearLayout>
+          </RelativeLayout>
+          """, encoding="utf-8")
+
+          # Refuse to enter the engine with an incomplete folder. This prevents
+          # the generic/demo screenpack from appearing as a misleading fallback.
+          java = root / "app/src/main/java/org/libsdl/app/SDLActivity.java"
+          source = java.read_text(encoding="utf-8")
+          old_ready = """    private void onSDLReady() {
+                  // Pass the exact path we just extracted to
+                  mBasePath = mSharedPrefs.getString(getString(R.string.game_folder_key), "");
+
+                  // Still empty, default to the external files dir (which is actually internal).
+                  if (mBasePath.isEmpty()) {
+                      mBasePath = getExternalFilesDir(null).getAbsolutePath();
+                  }
+                  SDLActivity.nativeOnSDLReady(mBasePath);
+              }
+          """
+          new_ready = """    private boolean hasRequiredMKGameFiles(File root) {
+                  return new File(root, "save/config.ini").isFile()
+                          && new File(root, "data/mkthd/system.def").isFile()
+                          && new File(root, "stages/bank.def").isFile()
+                          && new File(root, "chars").isDirectory();
+              }
+
+              private void onSDLReady() {
+                  mBasePath = mSharedPrefs.getString(getString(R.string.game_folder_key), "");
+                  if (mBasePath.isEmpty()) {
+                      mBasePath = getExternalFilesDir(null).getAbsolutePath();
+                  }
+
+                  if (!hasRequiredMKGameFiles(new File(mBasePath))) {
+                      new AlertDialog.Builder(this)
+                              .setTitle("MK HD game files not found")
+                              .setMessage("This APK contains the native Ikemen GO runtime, not the game data. Select the folder containing save/config.ini, data/mkthd/system.def, stages/bank.def, and chars/.")
+                              .setPositiveButton("Choose game folder", (dialog, which) -> openDirectoryPicker())
+                              .setNegativeButton("Exit", (dialog, which) -> finish())
+                              .setCancelable(false)
+                              .show();
+                      return;
+                  }
+
+                  SDLActivity.nativeOnSDLReady(mBasePath);
+              }
+          """
+          if old_ready not in source:
+              raise SystemExit("Could not find expected onSDLReady method; refusing to build without the missing-game guard.")
+          source = source.replace(old_ready, new_ready, 1)
+          java.write_text(source, encoding="utf-8")
+          PY
+
+          echo "Runtime-only manifest and dedicated 4-button touch layout prepared."
           echo "ANDROID_APK_REPO=$WRAPPER_DIR" >> "$GITHUB_ENV"
 
       - name: Build engine and APK
@@ -103,7 +284,7 @@ EOF
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: MK-Trilogy-HD-Android-APK
+          name: MK-HD-Android-ARM64
           path: bin/ikemen-go.apk
           if-no-files-found: error
           retention-days: 14
