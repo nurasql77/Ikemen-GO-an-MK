@@ -1275,6 +1275,20 @@ function build_android_apk() {
 
 	ensure_android_sdk_for_gradle
 	sync_android_apk_repo
+
+	# Brand this fork as a standalone MK Trilogy HD app without changing the
+	# Android wrapper's Java namespace (which its SDL classes depend on).
+	local app_gradle="$ANDROID_APK_DIR/app/build.gradle"
+	local app_strings="$ANDROID_APK_DIR/app/src/main/res/values/strings.xml"
+	local android_app_id="${ANDROID_APP_ID:-com.nurasql77.mktrilogyhd}"
+	local android_app_name="${ANDROID_APP_NAME:-MK Trilogy HD}"
+	if [[ -f "$app_gradle" ]]; then
+		sed_inplace "s/applicationId \"org.ikemen_engine.ikemen_go\"/applicationId \"$android_app_id\"/" "$app_gradle"
+	fi
+	if [[ -f "$app_strings" ]]; then
+		sed_inplace "s#<string name=\"app_name\" translatable=\"false\">[^<]*</string>#<string name=\"app_name\" translatable=\"false\">$android_app_name</string>#" "$app_strings"
+	fi
+
 	ensure_mobile_runtime_assets
 	stage_android_apk_libs
 	stage_android_apk_assets
