@@ -107,6 +107,16 @@ jobs:
           if old_touch_start not in source:
               raise SystemExit("Could not find expected touch event block; refusing to build with unknown input handling.")
           source = source.replace(old_touch_start, new_touch_start, 1)
+
+          old_hit_test = """        View v = findViewById(viewId);
+                  if (v == null) return;
+          """
+          new_hit_test = """        View v = findViewById(viewId);
+                  if (v == null || v.getVisibility() != View.VISIBLE) return;
+          """
+          if old_hit_test not in source:
+              raise SystemExit("Could not find expected button hit-test code; refusing to build with unsafe hidden hitboxes.")
+          source = source.replace(old_hit_test, new_hit_test, 1)
           java.write_text(source, encoding="utf-8")
 
           layout = root / "app/src/main/res/layout/virtual_controller.xml"
