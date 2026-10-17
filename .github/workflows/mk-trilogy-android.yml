@@ -272,7 +272,7 @@ jobs:
           APP_BUILDTIME: ${{ github.run_id }}
           ANDROID_APP_ID: kz.MKHD.base64E
           ANDROID_APP_NAME: MK HD
-          ANDROID_APK_REPO: ${{ env.ANDROID_APK_REPO }}
+          # ANDROID_APK_REPO is exported by the earlier GITHUB_ENV step.
         run: |
           set -euo pipefail
           chmod +x build/build_android.sh
