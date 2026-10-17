@@ -31,6 +31,8 @@ jobs:
         env:
           APP_VERSION: mk-trilogy-hd-${{ github.run_number }}
           APP_BUILDTIME: ${{ github.run_id }}
+          ANDROID_APP_ID: com.nurasql77.mktrilogyhd
+          ANDROID_APP_NAME: MK Trilogy HD
         run: |
           set -euo pipefail
           chmod +x build/build_android.sh
