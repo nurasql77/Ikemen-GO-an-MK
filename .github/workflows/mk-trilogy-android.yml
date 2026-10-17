@@ -27,12 +27,71 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
+      # The MK game archive is kept outside the repository because it contains
+      # the large chars/data/stages game resources. Only the small runtime
+      # resources needed by the APK are copied into the temporary build tree.
+      - name: Download MK Trilogy HD archive
+        env:
+          MK_ARCHIVE_URL: https://drive.google.com/uc?id=1nVTZAGssywICgH6YP-AGFm_nYSKK5YQ5
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --no-cache-dir gdown
+          mkdir -p "$RUNNER_TEMP/mk-archive"
+          gdown --fuzzy "$MK_ARCHIVE_URL" -O "$RUNNER_TEMP/mk-archive/mk-trilogy-hd.zip"
+          test -s "$RUNNER_TEMP/mk-archive/mk-trilogy-hd.zip"
+          unzip -q "$RUNNER_TEMP/mk-archive/mk-trilogy-hd.zip" -d "$RUNNER_TEMP/mk-archive/extracted"
+
+          MK_ROOT="$(find "$RUNNER_TEMP/mk-archive/extracted" -type f -name config.ini -path '*/save/config.ini' -printf '%h\n' | head -n 1)"
+          test -n "$MK_ROOT"
+          echo "MK_ROOT=$MK_ROOT" >> "$GITHUB_ENV"
+          echo "MK archive root: $MK_ROOT"
+
+          # These large game directories are deliberately NOT copied into the APK.
+          # The user will add chars/, data/ and stages/ separately after install.
+          rm -rf assets
+          mkdir -p assets
+
+          cp -a "$MK_ROOT/font" assets/
+          cp -a "$MK_ROOT/sound" assets/
+          cp -a "$MK_ROOT/video" assets/
+          mkdir -p assets/save
+          cp -f "$MK_ROOT/save/config.ini" assets/save/
+          cp -f "$MK_ROOT/save/stats.json" assets/save/
+
+          echo "APK game assets prepared:"
+          du -sh assets
+          find assets -type f -printf '%P\n' | sort
+
+      - name: Prepare minimal Android wrapper manifest
+        run: |
+          set -euo pipefail
+          WRAPPER_DIR="$RUNNER_TEMP/ikemen-droid"
+          git clone --depth=1 --branch main https://github.com/Jesuszilla/ikemen-droid.git "$WRAPPER_DIR"
+
+          MANIFEST="$WRAPPER_DIR/app/src/main/assets/manifest.txt"
+          cat > "$MANIFEST" <<'EOF'
+external/gamecontrollerdb.txt
+external/icons/IkemenCylia_256.png
+external/icons/IkemenCylia_96.png
+external/icons/IkemenCylia_48.png
+external/script/main.lua
+EOF
+
+          # build/build.sh stages the repository's ./assets directory on top of
+          # this manifest, so the MK font/sound/video/save files are packaged
+          # without pulling the generic Ikemen demo/KFM/stage assets.
+          echo "Minimal wrapper manifest:"
+          cat "$MANIFEST"
+
+          echo "ANDROID_APK_REPO=$WRAPPER_DIR" >> "$GITHUB_ENV"
+
       - name: Build engine and APK
         env:
           APP_VERSION: mk-trilogy-hd-${{ github.run_number }}
           APP_BUILDTIME: ${{ github.run_id }}
           ANDROID_APP_ID: kz.MKHD.base64E
           ANDROID_APP_NAME: MK HD
+          ANDROID_APK_REPO: ${{ env.ANDROID_APK_REPO }}
         run: |
           set -euo pipefail
           chmod +x build/build_android.sh
